@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use ratatui::{DefaultTerminal, Frame, layout::Rect, style::Color};
+use ratatui::{DefaultTerminal, Frame, layout::Rect};
 
+use rand::{Rng, rng};
 use rataudio_rta::{Band, RTA};
 
 fn main() -> Result<()> {
@@ -17,21 +18,34 @@ fn main() -> Result<()> {
 fn run(mut terminal: DefaultTerminal) -> Result<()> {
     let mut last_time = std::time::Instant::now();
 
-    // Update the bands every 500ms
-    const UPDATE_INTERVAL: Duration = Duration::from_millis(1000);
+    const UPDATE_INTERVAL: Duration = Duration::from_millis(100);
+
+    let f_min: f64 = 20.0;
+    let f_max: f64 = 20000.0;
+    let n_bands = 100;
+
+    let freqs: Vec<f64> = (0..n_bands)
+        .map(|i| {
+            let ratio = i as f64 / (n_bands - 1) as f64;
+            f_min * (f_max / f_min).powf(ratio)
+        })
+        .collect();
 
     let mut bands = vec![];
-    for i in 0..100 {
-        let value = (i as f64 / 100.0).clamp(0.0, 1.0);
-        bands.push(Band {
-            value,
-            color: Color::Yellow,
-        });
+    for i in 0..n_bands {
+        bands.push(Band::new(0.0, freqs[i] as u16));
     }
 
     loop {
         if last_time.elapsed() >= UPDATE_INTERVAL {
             last_time = std::time::Instant::now();
+            for i in 0..bands.len() {
+                let current = bands[i].value;
+
+                let new_val = (current + rng().random_range(-0.3..0.2)).clamp(0.0, 1.0);
+
+                bands[i].set_value(new_val);
+            }
         }
 
         terminal.draw(|frame| draw(frame, &bands))?;
@@ -42,13 +56,11 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
 }
 
 fn draw(frame: &mut Frame, bands: &[Band]) {
-    let size = Rect::new(0, 0, 180, 24);
-    frame.render_widget(
-        RTA {
-            bands: bands.to_vec(),
-        },
-        size,
-    );
+    let rta_area = Rect::new(0, 0, 105, 28);
+
+    let rta = RTA::new(bands.to_vec());
+
+    frame.render_widget(rta, rta_area);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
