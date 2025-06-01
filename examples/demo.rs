@@ -7,8 +7,22 @@ use ratatui::{DefaultTerminal, Frame, layout::Rect};
 use rand::{Rng, rng};
 use rataudio_rta::{Band, RTA};
 
+use simplelog::*;
+use std::fs::File;
+
+fn init_logging() {
+    WriteLogger::init(
+        LevelFilter::Debug,
+        Config::default(),
+        File::create("app.log").unwrap(),
+    )
+    .unwrap();
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
+    init_logging();
+    log::debug!("HELLO");
     let terminal = ratatui::init();
     let result = run(terminal);
     ratatui::restore();
