@@ -12,12 +12,7 @@ const MIN_DB: f64 = -60.0;
 
 /// A widget to display an RTA audio meter.
 ///
-/// A `RTA` renders a bar filled according to the value given to [`RTA::db`], [`RTA::sample_amplitude`] or
-/// [`RTA::ratio`]. The bar width and height are defined by the [`Rect`] it is
-/// [rendered](Widget::render) in.
-///
-/// [`RTA`] is also a [`StatefulWidget`], which means you can use it with [`RTAState`] to allow
-/// the meter to hold its peak value for a certain amount of time.
+/// A `RTA` renders a number of bars filled according to the value given to each `Band` in the `bands` vector.
 #[derive(Debug, Clone)]
 pub struct RTA<'a> {
     pub(crate) block: Option<Block<'a>>,
@@ -25,14 +20,14 @@ pub struct RTA<'a> {
     pub(crate) show_labels: bool,
 }
 
-/// A struct representing a single frequency band in the equalizer.
+/// A struct representing a single frequency band in the RTA meter.
 #[derive(Debug, Clone)]
 pub struct Band {
     /// The normalized value of the band, where the maximum is 1.0.
     pub value: f64,
     /// The color of the band.
     pub color: Color,
-    /// Frequency band label, if any.
+    /// Frequency band label, if any. Used for rendering frequency labels.
     pub frequency: Option<u16>,
 }
 
@@ -47,6 +42,7 @@ impl<'a> Widget for RTA<'a> {
             return;
         }
 
+        // Render labels at the top of the RTA meter.
         if self.show_labels {
             let [top_area, rest] =
                 Layout::vertical([Constraint::Length(2), Constraint::Fill(0)]).areas(rta_area);
@@ -73,7 +69,7 @@ impl<'a> Widget for RTA<'a> {
         // Render dB scale
         self.render_db_scale(db_axis, buf);
 
-        // Render frequency axis scale
+        // Render frequency scale
         self.render_freq_scale(freq_axis, buf);
 
         for (band, area) in zip(self.bands, rta_bands.iter()) {
