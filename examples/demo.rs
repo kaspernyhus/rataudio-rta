@@ -71,9 +71,7 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
 
 fn draw(frame: &mut Frame, bands: &[Band]) {
     let rta_area = Rect::new(0, 0, 105, 28);
-
-    let rta = RTA::new(bands.to_vec());
-
+    let rta = RTA::new(bands.to_vec()).highlight_peak_band();
     frame.render_widget(rta, rta_area);
 }
 

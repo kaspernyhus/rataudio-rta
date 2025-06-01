@@ -123,6 +123,18 @@ impl<'a> RTA<'a> {
         RTA { block: None, bands }
     }
 
+    /// Highlights the band with the maximum value by changing its color to red.
+    pub fn highlight_peak_band(mut self) -> Self {
+        if let Some((max_index, _)) = self.bands.iter().enumerate().max_by(|(_, a), (_, b)| {
+            a.value
+                .partial_cmp(&b.value)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }) {
+            self.bands[max_index].color = Color::Red;
+        }
+        self
+    }
+
     /// Surrounds the `RTA` widget with a [`Block`].
     ///
     /// The meter is rendered in the inner portion of the block once space for borders and padding
