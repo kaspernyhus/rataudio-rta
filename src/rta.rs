@@ -8,6 +8,8 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Widget},
 };
 
+const MIN_DB: f64 = -60.0;
+
 /// A widget to display an RTA audio meter.
 ///
 /// A `RTA` renders a bar filled according to the value given to [`RTA::db`], [`RTA::sample_amplitude`] or
@@ -20,6 +22,7 @@ use ratatui::{
 pub struct RTA<'a> {
     pub(crate) block: Option<Block<'a>>,
     pub(crate) bands: Vec<Band>,
+    pub(crate) show_labels: bool,
 }
 
 /// A struct representing a single frequency band in the equalizer.
@@ -39,9 +42,16 @@ impl<'a> Widget for RTA<'a> {
             block.render(area, buf);
         }
 
-        let rta_area = self.block.inner_if_some(area);
+        let mut rta_area = self.block.inner_if_some(area);
         if rta_area.is_empty() {
             return;
+        }
+
+        if self.show_labels {
+            let [top_area, rest] =
+                Layout::vertical([Constraint::Length(2), Constraint::Fill(0)]).areas(rta_area);
+            self.render_peak_labels(top_area, buf);
+            rta_area = rest;
         }
 
         let [left_area, right_area] =
@@ -53,18 +63,18 @@ impl<'a> Widget for RTA<'a> {
         let [rta_area, freq_axis] =
             Layout::vertical([Constraint::Fill(0), Constraint::Length(1)]).areas(right_area);
 
-        let borders = Block::new().borders(Borders::LEFT | Borders::BOTTOM);
-        let bars_area = borders.inner(rta_area);
-        borders.render(rta_area, buf);
+        let axis = Block::new().borders(Borders::LEFT | Borders::BOTTOM);
+        let bars_area = axis.inner(rta_area);
+        axis.render(rta_area, buf);
 
         let rta_bands =
             Layout::horizontal(vec![Constraint::Length(1); self.bands.len()]).split(bars_area);
 
-        // Render dB labels
-        self.render_db_labels(db_axis, buf);
+        // Render dB scale
+        self.render_db_scale(db_axis, buf);
 
-        // Render frequency axis labels
-        self.render_freq_labels(freq_axis, buf);
+        // Render frequency axis scale
+        self.render_freq_scale(freq_axis, buf);
 
         for (band, area) in zip(self.bands, rta_bands.iter()) {
             band.render(*area, buf);
@@ -81,6 +91,7 @@ impl Band {
         }
     }
 
+    /// Sets the value of the band.
     pub fn set_value(&mut self, value: f64) {
         self.value = value;
     }
@@ -120,7 +131,11 @@ impl Band {
 impl<'a> RTA<'a> {
     /// Creates a new `RTA` widget with the given bands.
     pub fn new(bands: Vec<Band>) -> Self {
-        RTA { block: None, bands }
+        RTA {
+            block: None,
+            bands,
+            show_labels: false,
+        }
     }
 
     /// Highlights the band with the maximum value by changing its color to red.
@@ -132,6 +147,12 @@ impl<'a> RTA<'a> {
         }) {
             self.bands[max_index].color = Color::Red;
         }
+        self
+    }
+
+    /// Sets whether to show the peak labels at the top of the meter.
+    pub fn show_labels(mut self, show: bool) -> Self {
+        self.show_labels = show;
         self
     }
 
@@ -147,7 +168,7 @@ impl<'a> RTA<'a> {
 }
 
 impl RTA<'_> {
-    fn render_db_labels(&self, area: Rect, buf: &mut Buffer) {
+    fn render_db_scale(&self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::vertical([Constraint::Ratio(1, 7); 7]);
         let areas = layout.split(area);
 
@@ -188,7 +209,7 @@ impl RTA<'_> {
         }
     }
 
-    fn render_freq_labels(&self, area: Rect, buf: &mut Buffer) {
+    fn render_freq_scale(&self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::horizontal([Constraint::Ratio(1, 5); 5]);
         let areas = layout.split(area);
 
@@ -213,5 +234,42 @@ impl RTA<'_> {
         Paragraph::new(Self::format_frequency_label(freq))
             .alignment(Alignment::Right)
             .render(areas[areas.len() - 1], buf);
+    }
+
+    /// Get a clone of the band with the highest value.
+    fn get_peak_band(&self) -> Option<Band> {
+        self.bands
+            .iter()
+            .max_by(|a, b| {
+                a.value
+                    .partial_cmp(&b.value)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .cloned()
+    }
+
+    /// Convert a ratio to a decibel value
+    fn ratio_to_db(&self, ratio: f64) -> f64 {
+        if ratio <= 0.0 {
+            MIN_DB
+        } else {
+            20.0 * ratio.log10()
+        }
+    }
+
+    fn render_peak_labels(&self, area: Rect, buf: &mut Buffer) {
+        let peak_band = self.get_peak_band().unwrap_or(Band::new(-60.0, 20));
+        let peak_db_value = self.ratio_to_db(peak_band.value);
+
+        let [db_label_area, band_label_area] =
+            Layout::vertical([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)]).areas(area);
+
+        let peak_db_label =
+            Paragraph::new(format!("Peak: {:.2}dB", peak_db_value)).alignment(Alignment::Center);
+        let peak_band_label =
+            Paragraph::new(format!("Band: {}Hz", peak_band.frequency.unwrap_or(20)))
+                .alignment(Alignment::Center);
+        peak_db_label.render(db_label_area, buf);
+        peak_band_label.render(band_label_area, buf);
     }
 }

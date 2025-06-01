@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use ratatui::{DefaultTerminal, Frame, layout::Rect};
+use ratatui::{DefaultTerminal, Frame, layout::Rect, widgets::Block};
 
 use rand::{Rng, rng};
 use rataudio_rta::{Band, RTA};
@@ -71,7 +71,10 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
 
 fn draw(frame: &mut Frame, bands: &[Band]) {
     let rta_area = Rect::new(0, 0, 105, 28);
-    let rta = RTA::new(bands.to_vec()).highlight_peak_band();
+    let rta = RTA::new(bands.to_vec())
+        .show_labels(true)
+        .highlight_peak_band()
+        .block(Block::bordered());
     frame.render_widget(rta, rta_area);
 }
 
