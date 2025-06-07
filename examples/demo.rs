@@ -38,27 +38,23 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
     let f_max: f64 = 20000.0;
     let n_bands = 100;
 
-    let freqs: Vec<f64> = (0..n_bands)
+    // Generate frequency bands logarithmically spaced between f_min and f_max
+    // Produce a vector of `Band` instances
+    let mut bands: Vec<Band> = (0..n_bands)
         .map(|i| {
             let ratio = i as f64 / (n_bands - 1) as f64;
-            f_min * (f_max / f_min).powf(ratio)
+            let freq = f_min * (f_max / f_min).powf(ratio);
+            Band::new(0.3, freq as u16)
         })
         .collect();
-
-    let mut bands = vec![];
-    for i in 0..n_bands {
-        bands.push(Band::new(0.0, freqs[i] as u16));
-    }
 
     loop {
         if last_time.elapsed() >= UPDATE_INTERVAL {
             last_time = std::time::Instant::now();
-            for i in 0..bands.len() {
-                let current = bands[i].value;
-
-                let new_val = (current + rng().random_range(-0.3..0.2)).clamp(0.0, 1.0);
-
-                bands[i].set_value(new_val);
+            for band in &mut bands {
+                let current_db = band.get_db();
+                let new_val = (current_db + rng().random_range(-3.2..3.0)).clamp(-60.0, 0.0);
+                band.set_db(new_val);
             }
         }
 
