@@ -87,9 +87,24 @@ impl Band {
         }
     }
 
-    /// Sets the value of the band.
-    pub fn set_value(&mut self, value: f64) {
+    /// Sets the value of the band as a ratio between 0.0 and 1.0.
+    pub fn set_ratio(&mut self, value: f64) {
         self.value = value;
+    }
+
+    /// Set the value of the band in decibels.
+    pub fn set_db(&mut self, db_value: f64) {
+        let db = db_value.clamp(MIN_DB, 0.0);
+        self.value = 10f64.powf(db / 20.0);
+    }
+
+    /// Get the value of the band in decibels.
+    pub fn get_db(&self) -> f64 {
+        if self.value <= 0.0 {
+            MIN_DB
+        } else {
+            20.0 * self.value.log10()
+        }
     }
 
     fn render(self, area: Rect, buf: &mut Buffer) {
