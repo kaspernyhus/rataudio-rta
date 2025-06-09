@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Widget},
 };
 
-const MIN_DB: f64 = -60.0;
+pub const MIN_DB: f64 = -65.0;
 
 /// A widget to display an RTA audio meter.
 ///
@@ -93,18 +93,28 @@ impl Band {
     }
 
     /// Set the value of the band in decibels.
-    pub fn set_db(&mut self, db_value: f64) {
-        let db = db_value.clamp(MIN_DB, 0.0);
-        self.value = 10f64.powf(db / 20.0);
+    pub fn set_db(&mut self, db: f64) {
+        if db <= MIN_DB {
+            self.value = 0.0;
+            return;
+        }
+        if db >= 0.0 {
+            self.value = 1.0;
+            return;
+        }
+        let db = db.clamp(MIN_DB, 0.0);
+        let db_ratio = 10_f64.powf(db / 20.0);
+        let min_db_ratio = 10_f64.powf(MIN_DB / 20.0);
+        let linear_ratio = (db_ratio.log10() - min_db_ratio.log10()) / (0.0 - min_db_ratio.log10());
+        self.value = linear_ratio;
     }
 
     /// Get the value of the band in decibels.
     pub fn get_db(&self) -> f64 {
-        if self.value <= 0.0 {
-            MIN_DB
-        } else {
-            20.0 * self.value.log10()
-        }
+        let min_db_ratio = 10_f64.powf(MIN_DB / 20.0);
+        let db_ratio =
+            10_f64.powf(self.value * (0.0 - min_db_ratio.log10()) + min_db_ratio.log10());
+        20.0 * db_ratio.log10()
     }
 
     fn render(self, area: Rect, buf: &mut Buffer) {
@@ -261,11 +271,9 @@ impl RTA<'_> {
 
     /// Convert a ratio to a decibel value
     fn ratio_to_db(&self, ratio: f64) -> f64 {
-        if ratio <= 0.0 {
-            MIN_DB
-        } else {
-            20.0 * ratio.log10()
-        }
+        let min_db_ratio = 10_f64.powf(MIN_DB / 20.0);
+        let db_ratio = 10_f64.powf(ratio * (0.0 - min_db_ratio.log10()) + min_db_ratio.log10());
+        20.0 * db_ratio.log10()
     }
 
     fn render_peak_labels(&self, area: Rect, buf: &mut Buffer) {

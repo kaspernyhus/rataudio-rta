@@ -5,7 +5,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{DefaultTerminal, Frame, layout::Rect, widgets::Block};
 
 use rand::{Rng, rng};
-use rataudio_rta::{Band, RTA};
+use rataudio_rta::{Band, MIN_DB, RTA};
 
 use simplelog::*;
 use std::fs::File;
@@ -44,7 +44,7 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
         .map(|i| {
             let ratio = i as f64 / (n_bands - 1) as f64;
             let freq = f_min * (f_max / f_min).powf(ratio);
-            Band::new(0.3, freq as u16)
+            Band::new(0.1, freq as u16)
         })
         .collect();
 
@@ -53,7 +53,7 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
             last_time = std::time::Instant::now();
             for band in &mut bands {
                 let current_db = band.get_db();
-                let new_val = (current_db + rng().random_range(-3.2..3.0)).clamp(-60.0, 0.0);
+                let new_val = (current_db + rng().random_range(-10.0..8.0)).clamp(MIN_DB, 0.0);
                 band.set_db(new_val);
             }
         }
