@@ -50,30 +50,56 @@ impl<'a> Widget for RTA<'a> {
             rta_area = rest;
         }
 
+        // left_area is the dB axis, right_area holds the RTA area and the frequency axis.
         let [left_area, right_area] =
             Layout::horizontal([Constraint::Length(3), Constraint::Fill(0)]).areas(rta_area);
 
+        // db axis must start one block above the bottom to align with frequency axis.
         let [db_axis, _] =
             Layout::vertical([Constraint::Fill(0), Constraint::Length(1)]).areas(left_area);
 
         let [rta_area, freq_axis] =
             Layout::vertical([Constraint::Fill(0), Constraint::Length(1)]).areas(right_area);
 
-        let axis = Block::new().borders(Borders::LEFT | Borders::BOTTOM);
-        let bars_area = axis.inner(rta_area);
-        axis.render(rta_area, buf);
+        let num_bands = self.bands.len();
+        if num_bands == 0 {
+            panic!("No bands configured — cannot continue");
+        }
+
+        // The min bar_width is 1
+        let bar_width = ((rta_area.width - 1) / num_bands as u16).clamp(1, rta_area.width);
+
+        let axis = Block::default()
+            .borders(Borders::LEFT | Borders::BOTTOM)
+            .border_style(Color::White);
+
+        let bands_area = axis.inner(rta_area);
+        let bands_area_width = bar_width * num_bands as u16;
+
+        axis.render(
+            Rect::new(
+                rta_area.x,
+                rta_area.y,
+                bands_area_width + 1,
+                rta_area.height,
+            ),
+            buf,
+        );
 
         let rta_bands =
-            Layout::horizontal(vec![Constraint::Length(1); self.bands.len()]).split(bars_area);
+            Layout::horizontal(vec![Constraint::Length(bar_width); num_bands]).split(bands_area);
 
         // Render dB scale
         self.render_db_scale(db_axis, buf);
 
         // Render frequency scale
-        self.render_freq_scale(freq_axis, buf);
+        self.render_freq_scale(
+            Rect::new(freq_axis.x, freq_axis.y, bands_area_width, freq_axis.height),
+            buf,
+        );
 
         for (band, area) in zip(self.bands, rta_bands.iter()) {
-            band.render(*area, buf);
+            band.render(*area, bar_width, buf);
         }
     }
 }
@@ -117,7 +143,7 @@ impl Band {
         20.0 * db_ratio.log10()
     }
 
-    fn render(self, area: Rect, buf: &mut Buffer) {
+    fn render(self, area: Rect, width: u16, buf: &mut Buffer) {
         let value = self.value.clamp(0.0, 1.0);
 
         let scaled = value * area.height as f64;
@@ -136,15 +162,19 @@ impl Band {
         };
 
         for i in 0..full_blocks {
-            buf[(area.left(), area.bottom().saturating_sub(i + 1))]
-                .set_fg(self.color)
-                .set_symbol(ratatui::symbols::bar::FULL);
+            for x in 0..width {
+                buf[(area.left() + x, area.bottom().saturating_sub(i + 1))]
+                    .set_fg(self.color)
+                    .set_symbol(ratatui::symbols::bar::FULL);
+            }
         }
         if !partial_block.is_empty() {
             let partial_y = area.bottom().saturating_sub(full_blocks + 1);
-            buf[(area.left(), partial_y)]
-                .set_fg(self.color)
-                .set_symbol(partial_block);
+            for x in 0..width {
+                buf[(area.left() + x, partial_y)]
+                    .set_fg(self.color)
+                    .set_symbol(partial_block);
+            }
         }
     }
 }
@@ -191,35 +221,35 @@ impl<'a> RTA<'a> {
 impl RTA<'_> {
     fn render_db_scale(&self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::vertical([Constraint::Ratio(1, 7); 7]);
-        let areas = layout.split(area);
+        let labels = layout.split(area);
 
         Paragraph::new("0")
             .alignment(Alignment::Right)
-            .render(areas[0], buf);
+            .render(labels[0], buf);
 
         Paragraph::new("-10")
             .alignment(Alignment::Right)
-            .render(areas[1], buf);
+            .render(labels[1], buf);
 
         Paragraph::new("-20")
             .alignment(Alignment::Right)
-            .render(areas[2], buf);
+            .render(labels[2], buf);
 
         Paragraph::new("-30")
             .alignment(Alignment::Right)
-            .render(areas[3], buf);
+            .render(labels[3], buf);
 
         Paragraph::new("-40")
             .alignment(Alignment::Right)
-            .render(areas[4], buf);
+            .render(labels[4], buf);
 
         Paragraph::new("-50")
             .alignment(Alignment::Right)
-            .render(areas[5], buf);
+            .render(labels[5], buf);
 
         Paragraph::new("-60")
             .alignment(Alignment::Right)
-            .render(areas[6], buf);
+            .render(labels[6], buf);
     }
 
     fn format_frequency_label(freq: u16) -> String {
@@ -231,8 +261,10 @@ impl RTA<'_> {
     }
 
     fn render_freq_scale(&self, area: Rect, buf: &mut Buffer) {
+        let [_, label_area] =
+            Layout::horizontal([Constraint::Length(1), Constraint::Fill(0)]).areas(area);
         let layout = Layout::horizontal([Constraint::Ratio(1, 5); 5]);
-        let areas = layout.split(area);
+        let areas = layout.split(label_area);
 
         let n_bands = self.bands.len();
         let n_labels = areas.len();

@@ -36,7 +36,7 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
 
     let f_min: f64 = 20.0;
     let f_max: f64 = 20000.0;
-    let n_bands = 100;
+    let n_bands = 30;
 
     // Generate frequency bands logarithmically spaced between f_min and f_max
     // Produce a vector of `Band` instances
