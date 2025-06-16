@@ -63,13 +63,16 @@ impl<'a> Widget for RTA<'a> {
             rta_area = rest;
         }
 
+        let db_axis_width = if self.min_db > -100.0 { 3 } else { 4 };
+
         // left_area is the dB axis, right_area holds the RTA area and the frequency axis.
         let [left_area, right_area] =
-            Layout::horizontal([Constraint::Length(3), Constraint::Fill(0)]).areas(rta_area);
+            Layout::horizontal([Constraint::Length(db_axis_width), Constraint::Fill(0)])
+                .areas(rta_area);
 
         // db axis must start one block above the bottom to align with frequency axis.
         let [db_axis, _] =
-            Layout::vertical([Constraint::Fill(0), Constraint::Length(1)]).areas(left_area);
+            Layout::vertical([Constraint::Fill(0), Constraint::Length(2)]).areas(left_area);
 
         let [rta_area, freq_axis] =
             Layout::vertical([Constraint::Fill(0), Constraint::Length(1)]).areas(right_area);
@@ -119,36 +122,24 @@ impl<'a> Widget for RTA<'a> {
 
 impl RTA<'_> {
     fn render_db_scale(&self, area: Rect, buf: &mut Buffer) {
-        let layout = Layout::vertical([Constraint::Ratio(1, 7); 7]);
-        let labels = layout.split(area);
+        // Render a label for each 3rd line
+        let num_labels = (area.height as u32) / 3;
 
-        Paragraph::new("0")
-            .alignment(Alignment::Right)
-            .render(labels[0], buf);
+        let layout = Layout::vertical(vec![
+            Constraint::Ratio(1, num_labels);
+            num_labels.try_into().unwrap()
+        ]);
+        let label_areas = layout.split(area);
 
-        Paragraph::new("-20")
-            .alignment(Alignment::Right)
-            .render(labels[1], buf);
+        let label_value_delta = -self.min_db / num_labels as f32;
 
-        Paragraph::new("-40")
-            .alignment(Alignment::Right)
-            .render(labels[2], buf);
-
-        Paragraph::new("-60")
-            .alignment(Alignment::Right)
-            .render(labels[3], buf);
-
-        Paragraph::new("-80")
-            .alignment(Alignment::Right)
-            .render(labels[4], buf);
-
-        Paragraph::new("-100")
-            .alignment(Alignment::Right)
-            .render(labels[5], buf);
-
-        Paragraph::new("-120")
-            .alignment(Alignment::Right)
-            .render(labels[6], buf);
+        for (i, label_area) in label_areas.iter().enumerate() {
+            let db_value = 0.0 - (label_value_delta * i as f32);
+            let label_text = format!("{:.0}", db_value);
+            Paragraph::new(label_text)
+                .alignment(Alignment::Right)
+                .render(*label_area, buf);
+        }
     }
 
     fn format_frequency_label(freq: u16) -> String {
@@ -200,16 +191,9 @@ impl RTA<'_> {
             .cloned()
     }
 
-    /// Convert a ratio to a decibel value
-    fn ratio_to_db(&self, ratio: f32) -> f32 {
-        let min_db_ratio = 10_f32.powf(self.min_db / 20.0);
-        let db_ratio = 10_f32.powf(ratio * (0.0 - min_db_ratio.log10()) + min_db_ratio.log10());
-        20.0 * db_ratio.log10()
-    }
-
     fn render_peak_labels(&self, area: Rect, buf: &mut Buffer) {
         let peak_band = self.get_peak_band().unwrap_or(Band::new(-60.0, 20));
-        let peak_db_value = self.ratio_to_db(peak_band.value);
+        let peak_db_value = peak_band.get_db(self.min_db);
 
         let [db_label_area, band_label_area] =
             Layout::vertical([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)]).areas(area);

@@ -10,7 +10,7 @@ use rataudio_rta::{Band, RTA};
 use simplelog::*;
 use std::fs::File;
 
-const MIN_DB: f32 = -120.0;
+const MIN_DB: f32 = -90.0;
 
 fn init_logging() {
     WriteLogger::init(
@@ -68,7 +68,7 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
 }
 
 fn draw(frame: &mut Frame, bands: &[Band]) {
-    let rta_area = Rect::new(0, 0, 105, 28);
+    let rta_area = Rect::new(0, 0, 97, 24);
     let rta = RTA::new(bands.to_vec(), MIN_DB)
         .highlight_peak_band()
         .block(Block::bordered());
