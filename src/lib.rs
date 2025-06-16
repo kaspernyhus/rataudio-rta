@@ -1,3 +1,4 @@
+mod rendering;
 mod rta;
 
-pub use rta::{Band, MIN_DB, RTA};
+pub use rta::{Band, RTA};

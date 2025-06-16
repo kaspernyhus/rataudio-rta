@@ -5,10 +5,12 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{DefaultTerminal, Frame, layout::Rect, widgets::Block};
 
 use rand::{Rng, rng};
-use rataudio_rta::{Band, MIN_DB, RTA};
+use rataudio_rta::{Band, RTA};
 
 use simplelog::*;
 use std::fs::File;
+
+const MIN_DB: f32 = -120.0;
 
 fn init_logging() {
     WriteLogger::init(
@@ -52,9 +54,9 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
         if last_time.elapsed() >= UPDATE_INTERVAL {
             last_time = std::time::Instant::now();
             for band in &mut bands {
-                let current_db = band.get_db();
+                let current_db = band.get_db(MIN_DB);
                 let new_val = (current_db + rng().random_range(-10.0..8.0)).clamp(MIN_DB, 0.0);
-                band.set_db(new_val);
+                band.set_db(new_val, MIN_DB);
             }
         }
 
@@ -67,8 +69,7 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
 
 fn draw(frame: &mut Frame, bands: &[Band]) {
     let rta_area = Rect::new(0, 0, 105, 28);
-    let rta = RTA::new(bands.to_vec())
-        .show_labels(true)
+    let rta = RTA::new(bands.to_vec(), MIN_DB)
         .highlight_peak_band()
         .block(Block::bordered());
     frame.render_widget(rta, rta_area);
