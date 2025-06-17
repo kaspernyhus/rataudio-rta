@@ -77,42 +77,40 @@ impl<'a> Widget for RTA<'a> {
         let [rta_area, freq_axis] =
             Layout::vertical([Constraint::Fill(0), Constraint::Length(1)]).areas(right_area);
 
-        let num_bands = self.bands.len();
+        let num_bands = self.bands.len() as u16;
         if num_bands == 0 {
             panic!("No bands configured — cannot continue");
         }
 
         // The min bar_width is 1
-        let bar_width = ((rta_area.width - 1) / num_bands as u16).clamp(1, rta_area.width);
+        let bar_width = ((rta_area.width - 1) / num_bands).clamp(1, rta_area.width);
 
         let axis = Block::default()
             .borders(Borders::LEFT | Borders::BOTTOM)
             .border_style(Color::White);
 
         let bands_area = axis.inner(rta_area);
-        let bands_area_width = bar_width * num_bands as u16;
+        let bands_area_width = bar_width * num_bands;
 
+        // Render the x-axis and frequency labels only as wide as the bars area
         axis.render(
-            Rect::new(
-                rta_area.x,
-                rta_area.y,
-                bands_area_width + 1,
-                rta_area.height,
-            ),
+            Rect {
+                width: bands_area_width + 1,
+                ..rta_area
+            },
             buf,
         );
 
-        let rta_bands =
-            Layout::horizontal(vec![Constraint::Length(bar_width); num_bands]).split(bands_area);
+        let rta_bands = Layout::horizontal(vec![Constraint::Length(bar_width); num_bands as usize])
+            .split(bands_area);
 
-        // Render dB scale
         self.render_db_scale(db_axis, buf);
 
-        // Render frequency scale
-        self.render_freq_scale(
-            Rect::new(freq_axis.x, freq_axis.y, bands_area_width, freq_axis.height),
-            buf,
-        );
+        let freq_axis = Rect {
+            width: bands_area_width + 1,
+            ..freq_axis
+        };
+        self.render_freq_scale(freq_axis, bar_width, buf);
 
         for (band, area) in zip(self.bands, rta_bands.iter()) {
             band.render(*area, bar_width, buf);
@@ -143,40 +141,56 @@ impl RTA<'_> {
     }
 
     fn format_frequency_label(freq: u16) -> String {
-        if freq >= 1000 {
-            format!("{:.0}k", freq as f64 / 1000.0)
+        if freq >= 10000 {
+            let label = format!("{:.0}", freq as f64 / 1000.0);
+            format!("{}k", label)
+        } else if freq >= 1000 {
+            let label = format!("{:.1}", freq as f64 / 1000.0);
+            if label.ends_with(".0") {
+                format!("{}k", label.trim_end_matches(".0"))
+            } else {
+                format!("{}k", label)
+            }
         } else {
-            format!("{:.0}", freq)
+            format!("{}", freq)
         }
     }
 
-    fn render_freq_scale(&self, area: Rect, buf: &mut Buffer) {
+    fn render_freq_scale(&self, area: Rect, bar_width: u16, buf: &mut Buffer) {
+        // skip the first char position where the dB axis starts
         let [_, label_area] =
             Layout::horizontal([Constraint::Length(1), Constraint::Fill(0)]).areas(area);
-        let layout = Layout::horizontal([Constraint::Ratio(1, 5); 5]);
-        let areas = layout.split(label_area);
 
-        let n_bands = self.bands.len();
-        let n_labels = areas.len();
-        let n_bands_per_label = n_bands / n_labels;
-        let label_positions = Vec::new()
-            .into_iter()
-            .chain((0..n_labels).map(|i| i * n_bands_per_label))
-            .collect::<Vec<_>>();
+        // Decide the spacing between labels based on the bar width.
+        let label_spacing_bars = if bar_width > 3 {
+            2
+        } else if bar_width > 2 {
+            4
+        } else {
+            6
+        };
 
-        for (i, area) in areas.iter().enumerate() {
-            let band_index = label_positions[i];
+        let label_width = label_spacing_bars * bar_width;
+        let num_labels = (label_area.width - (label_spacing_bars * bar_width).max(9)) / label_width;
+
+        let mut constraints = vec![Constraint::Length(label_width); num_labels as usize];
+        constraints.push(Constraint::Fill(0));
+
+        let labels_area = Layout::horizontal(constraints).split(label_area);
+
+        for (i, label_area) in labels_area.iter().enumerate() {
+            let band_index = i * label_spacing_bars as usize;
             let freq = self.bands[band_index].frequency.unwrap_or(0);
-
             Paragraph::new(Self::format_frequency_label(freq))
                 .alignment(Alignment::Left)
-                .render(*area, buf);
+                .render(*label_area, buf);
         }
 
+        // Render the last label on the right side of the last area.
         let freq = self.bands[self.bands.len() - 1].frequency.unwrap_or(0);
         Paragraph::new(Self::format_frequency_label(freq))
             .alignment(Alignment::Right)
-            .render(areas[areas.len() - 1], buf);
+            .render(labels_area[labels_area.len() - 1], buf);
     }
 
     /// Get a clone of the band with the highest value.
